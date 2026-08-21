@@ -13,6 +13,9 @@ type clientOptions struct {
 	maxIdleConns        *int
 	maxIdleConnsPerHost *int
 	idleConnTimeout     *time.Duration
+	rootCAFile          *string
+	rootCAPEM           *string
+	rootCAReplaceSystem *bool
 }
 
 func (o *clientOptions) apply(base Config) Config {
@@ -44,6 +47,18 @@ func (o *clientOptions) apply(base Config) Config {
 
 	if o.idleConnTimeout != nil {
 		cfg.IdleConnTimeout = *o.idleConnTimeout
+	}
+
+	if o.rootCAFile != nil {
+		cfg.TLS.RootCAFile = *o.rootCAFile
+	}
+
+	if o.rootCAPEM != nil {
+		cfg.TLS.RootCAPEM = *o.rootCAPEM
+	}
+
+	if o.rootCAReplaceSystem != nil {
+		cfg.TLS.RootCAReplaceSystem = *o.rootCAReplaceSystem
 	}
 
 	return cfg
@@ -82,4 +97,25 @@ func WithMaxIdleConnsPerHost(n int) Option {
 // WithIdleConnTimeout overrides the idle connection timeout for this client.
 func WithIdleConnTimeout(t time.Duration) Option {
 	return func(o *clientOptions) { o.idleConnTimeout = &t }
+}
+
+// WithRootCAFile overrides the root CA certificate file path for this client.
+// The file must contain PEM-encoded certificates; all of them are added to
+// the trust pool. An empty path clears the base configuration's CA file.
+func WithRootCAFile(path string) Option {
+	return func(o *clientOptions) { o.rootCAFile = &path }
+}
+
+// WithRootCAPEM overrides the inline PEM-encoded root CA data for this
+// client. Multiple certificates in one string are all added to the trust
+// pool. An empty string clears the base configuration's CA PEM data.
+func WithRootCAPEM(pem string) Option {
+	return func(o *clientOptions) { o.rootCAPEM = &pem }
+}
+
+// WithRootCAReplaceSystem overrides whether this client replaces the system
+// certificate pool instead of appending to it. When true, only the root CAs
+// configured for this client are trusted.
+func WithRootCAReplaceSystem(replace bool) Option {
+	return func(o *clientOptions) { o.rootCAReplaceSystem = &replace }
 }
