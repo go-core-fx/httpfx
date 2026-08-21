@@ -23,6 +23,12 @@ func newClient(config Config) (*http.Client, error) {
 		return nil, err
 	}
 
+	tlsCfg, err := buildTLSConfig(config.TLS)
+	if err != nil {
+		return nil, err
+	}
+	transport.TLSClientConfig = tlsCfg
+
 	return &http.Client{
 		Transport: transport,
 		Timeout:   config.Timeout,

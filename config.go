@@ -30,4 +30,28 @@ type Config struct {
 	// IdleConnTimeout is the maximum time an idle connection is kept alive.
 	// Zero means no timeout.
 	IdleConnTimeout time.Duration
+
+	// TLS configures root CA trust for TLS connections; see [TLSConfig].
+	// The zero value keeps the default behavior (system certificate pool only).
+	TLS TLSConfig
+}
+
+// TLSConfig holds root CA trust configuration for TLS connections.
+type TLSConfig struct {
+	// RootCAFile is a path to a PEM-encoded root CA certificate file.
+	// Multiple certificates in one file are all added to the pool.
+	RootCAFile string
+
+	// RootCAPEM is PEM-encoded root CA certificate data. Multiple
+	// certificates in one string are all added to the pool.
+	RootCAPEM string
+
+	// RootCAReplaceSystem replaces the system certificate pool instead of
+	// appending to it. When true, only the configured root CAs are trusted.
+	//
+	// Note: append mode relies on [x509.SystemCertPool], which returns an
+	// empty pool on macOS/darwin (system roots load lazily at verify time),
+	// so append-mode behavior can differ by platform. Replace mode always
+	// trusts exactly the configured CAs.
+	RootCAReplaceSystem bool
 }
