@@ -7,7 +7,6 @@ type Option func(*clientOptions)
 
 type clientOptions struct {
 	proxyURL            *string
-	proxyFromEnv        *bool
 	bypass              *string
 	timeout             *time.Duration
 	maxIdleConns        *int
@@ -23,10 +22,6 @@ func (o *clientOptions) apply(base Config) Config {
 
 	if o.proxyURL != nil {
 		cfg.ProxyURL = *o.proxyURL
-	}
-
-	if o.proxyFromEnv != nil {
-		cfg.ProxyFromEnv = *o.proxyFromEnv
 	}
 
 	if o.bypass != nil {
@@ -65,18 +60,8 @@ func (o *clientOptions) apply(base Config) Config {
 }
 
 // WithProxyURL overrides the SOCKS5 proxy URL for this client.
-func WithProxyURL(rawURL string) Option {
-	return func(o *clientOptions) { o.proxyURL = &rawURL }
-}
-
-// WithProxyFromEnv overrides the ProxyFromEnv flag for this client.
-func WithProxyFromEnv(v bool) Option {
-	return func(o *clientOptions) { o.proxyFromEnv = &v }
-}
-
-// WithBypass overrides the proxy bypass list for this client.
-func WithBypass(bypass string) Option {
-	return func(o *clientOptions) { o.bypass = &bypass }
+func WithProxyURL(rawURL string, bypass string) Option {
+	return func(o *clientOptions) { o.proxyURL = &rawURL; o.bypass = &bypass }
 }
 
 // WithTimeout overrides the client-level timeout for this client.

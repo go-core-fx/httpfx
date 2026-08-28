@@ -1,24 +1,17 @@
 package httpfx_test
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
-	"os"
-	"os/exec"
+	"net/url"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/go-core-fx/httpfx"
 	"golang.org/x/net/proxy"
-)
-
-// Environment variables coordinating the child-process scenarios in
-// TestClientProxyFromEnv.
-const (
-	envProxyTestCase  = "HTTPFX_TEST_ENV_PROXY_CASE"
-	envProxyTestKey   = "HTTPFX_TEST_ENV_PROXY_KEY"
-	envProxyTestValue = "HTTPFX_TEST_ENV_PROXY_VALUE"
 )
 
 // errFakeDialerFailure is the sentinel error returned by fakeDialer. It proves
@@ -34,8 +27,8 @@ func (fakeDialer) Dial(_, _ string) (net.Conn, error) {
 	return nil, errFakeDialerFailure
 }
 
-// clearProxyEnv clears every environment variable that proxy.FromEnvironment
-// consults, making env-dependent tests hermetic.
+// clearProxyEnv clears every proxy-related environment variable so the
+// SOCKS5 tests are hermetic regardless of the host's proxy configuration.
 func clearProxyEnv(t *testing.T) {
 	t.Helper()
 
@@ -58,21 +51,31 @@ func TestClientDefaultConfig(t *testing.T) {
 		t.Fatalf("Transport type = %T, want *http.Transport", client.Transport)
 	}
 
-	if transport.Proxy != nil {
-		t.Errorf("transport.Proxy set = %t, want false (no proxy by default)", transport.Proxy != nil)
+	defaultTransport := http.DefaultTransport.(*http.Transport)
+
+	if transport.Proxy == nil {
+		t.Error("transport.Proxy = nil, want inherited http.DefaultTransport.Proxy")
 	}
-	if transport.DialContext != nil {
-		t.Errorf("transport.DialContext set = %t, want false (no proxy by default)",
-			transport.DialContext != nil)
+	if transport.DialContext == nil {
+		t.Error("transport.DialContext = nil, want inherited http.DefaultTransport.DialContext")
 	}
 	if client.Timeout != 0 {
-		t.Errorf("client.Timeout = %v, want 0", client.Timeout)
+		t.Errorf("client.Timeout = %v, want 0 (inherits http.DefaultClient)", client.Timeout)
 	}
-	if transport.MaxIdleConns != 0 {
-		t.Errorf("MaxIdleConns = %d, want 0", transport.MaxIdleConns)
+	if transport.MaxIdleConns != defaultTransport.MaxIdleConns {
+		t.Errorf("MaxIdleConns = %d, want inherited default %d",
+			transport.MaxIdleConns, defaultTransport.MaxIdleConns)
 	}
-	if transport.IdleConnTimeout != 0 {
-		t.Errorf("IdleConnTimeout = %v, want 0", transport.IdleConnTimeout)
+	if transport.MaxIdleConnsPerHost != defaultTransport.MaxIdleConnsPerHost {
+		t.Errorf("MaxIdleConnsPerHost = %d, want inherited default %d",
+			transport.MaxIdleConnsPerHost, defaultTransport.MaxIdleConnsPerHost)
+	}
+	if transport.IdleConnTimeout != defaultTransport.IdleConnTimeout {
+		t.Errorf("IdleConnTimeout = %v, want inherited default %v",
+			transport.IdleConnTimeout, defaultTransport.IdleConnTimeout)
+	}
+	if transport == defaultTransport {
+		t.Error("client Transport is the shared http.DefaultTransport, want a distinct clone")
 	}
 }
 
@@ -105,6 +108,8 @@ func TestClientInvalidProxyURL(t *testing.T) {
 }
 
 func TestClientTransportSettings(t *testing.T) {
+	defaultTransport := http.DefaultTransport.(*http.Transport)
+
 	tests := []struct {
 		name                    string
 		config                  httpfx.Config
@@ -114,11 +119,12 @@ func TestClientTransportSettings(t *testing.T) {
 		wantTimeout             time.Duration
 	}{
 		{
-			name:                "zero_defaults",
-			config:              httpfx.Config{},
-			wantMaxIdleConns:    0,
-			wantTimeout:         0,
-			wantIdleConnTimeout: 0,
+			name:                    "zero_defaults",
+			config:                  httpfx.Config{},
+			wantMaxIdleConns:        defaultTransport.MaxIdleConns,
+			wantMaxIdleConnsPerHost: defaultTransport.MaxIdleConnsPerHost,
+			wantIdleConnTimeout:     defaultTransport.IdleConnTimeout,
+			wantTimeout:             0,
 		},
 		{
 			name: "typical_values",
@@ -252,9 +258,9 @@ func TestClientSOCKS5Proxy(t *testing.T) {
 			wantDialer: true,
 		},
 		{
-			name:       "unsupported_scheme_fails_dialer_creation",
+			name:       "unsupported_scheme_rejected_as_invalid",
 			config:     httpfx.Config{ProxyURL: "http://127.0.0.1:8080"},
-			wantErr:    httpfx.ErrProxyDialFailed,
+			wantErr:    httpfx.ErrInvalidProxyURL,
 			wantDialer: false,
 		},
 	}
@@ -284,11 +290,9 @@ func TestClientSOCKS5Proxy(t *testing.T) {
 				t.Fatalf("Transport type = %T, want *http.Transport", client.Transport)
 			}
 
-			// SOCKS5 proxies are handled at the dialer layer, not via
-			// transport.Proxy (which is for HTTP CONNECT proxies).
-			if transport.Proxy != nil {
-				t.Error("transport.Proxy set, want nil for SOCKS5 dialer")
-			}
+			// SOCKS5 proxies are handled at the dialer layer via
+			// transport.DialContext. The transport.Proxy field is inherited
+			// from http.DefaultTransport and left untouched here.
 			if tt.wantDialer && transport.DialContext == nil {
 				t.Error("transport.DialContext = nil, want non-nil SOCKS5 dialer")
 			}
@@ -296,138 +300,6 @@ func TestClientSOCKS5Proxy(t *testing.T) {
 				t.Error("transport.DialContext set, want nil")
 			}
 		})
-	}
-}
-
-func TestClientProxyURLTakesPrecedenceOverEnv(t *testing.T) {
-	clearProxyEnv(t)
-	t.Setenv("ALL_PROXY", "")
-
-	client, err := httpfx.NewClientForTest(httpfx.Config{
-		ProxyURL:     "socks5://127.0.0.1:1080",
-		ProxyFromEnv: true,
-	})
-	if err != nil {
-		t.Fatalf("httpfx.NewClientForTest() error = %v, want nil", err)
-	}
-
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("Transport type = %T, want *http.Transport", client.Transport)
-	}
-	if transport.DialContext == nil {
-		t.Error("transport.DialContext = nil, want explicit ProxyURL to win over env mode")
-	}
-}
-
-// TestClientProxyFromEnv verifies the ProxyFromEnv path for every ALL_PROXY
-// state. Each scenario runs in a fresh child process because
-// golang.org/x/net/proxy caches the environment lookup (envOnce) on first use,
-// making in-process t.Setenv variations unreliable.
-func TestClientProxyFromEnv(t *testing.T) {
-	if caseName := os.Getenv(envProxyTestCase); caseName != "" {
-		runClientProxyFromEnvCase(t, caseName)
-		return
-	}
-
-	tests := []struct {
-		name     string
-		envKey   string
-		envValue string
-		wantErr  error
-	}{
-		{
-			name:     "valid_all_proxy_uppercase",
-			envKey:   "ALL_PROXY",
-			envValue: "socks5://127.0.0.1:1080",
-		},
-		{
-			name:     "valid_all_proxy_lowercase",
-			envKey:   "all_proxy",
-			envValue: "socks5://127.0.0.1:1080",
-		},
-		{name: "unset_env_yields_direct_transport"},
-		{
-			name:     "unsupported_scheme_in_env",
-			envKey:   "ALL_PROXY",
-			envValue: "http://127.0.0.1:8080",
-			wantErr:  httpfx.ErrInvalidProxyURL,
-		},
-		{
-			name:     "unparseable_env_value",
-			envKey:   "ALL_PROXY",
-			envValue: ":::",
-			wantErr:  httpfx.ErrInvalidProxyURL,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command(os.Args[0], "-test.run=^TestClientProxyFromEnv$", "-test.v")
-			cmd.Env = append(os.Environ(),
-				envProxyTestCase+"="+tt.name,
-				envProxyTestKey+"="+tt.envKey,
-				envProxyTestValue+"="+tt.envValue,
-			)
-
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("child process for case %q failed: %v\n%s", tt.name, err, out)
-			}
-		})
-	}
-}
-
-// runClientProxyFromEnvCase executes a single env scenario inside the child
-// process with a pristine proxy.FromEnvironment cache.
-func runClientProxyFromEnvCase(t *testing.T, caseName string) {
-	t.Helper()
-
-	clearProxyEnv(t)
-
-	var (
-		wantErr    error
-		wantDialer bool
-	)
-
-	switch caseName {
-	case "valid_all_proxy_uppercase", "valid_all_proxy_lowercase":
-		wantDialer = true
-	case "unset_env_yields_direct_transport":
-	case "unsupported_scheme_in_env", "unparseable_env_value":
-		wantErr = httpfx.ErrInvalidProxyURL
-	default:
-		t.Fatalf("unknown env proxy test case %q", caseName)
-	}
-
-	if key := os.Getenv(envProxyTestKey); key != "" {
-		t.Setenv(key, os.Getenv(envProxyTestValue))
-	}
-
-	client, err := httpfx.NewClientForTest(httpfx.Config{ProxyFromEnv: true})
-
-	if wantErr != nil {
-		if client != nil {
-			t.Errorf("client = %v, want nil on error", client)
-		}
-		if !errors.Is(err, wantErr) {
-			t.Errorf("error = %v, want wrapped %v", err, wantErr)
-		}
-		return
-	}
-
-	if err != nil {
-		t.Fatalf("httpfx.NewClientForTest() error = %v, want nil", err)
-	}
-
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("Transport type = %T, want *http.Transport", client.Transport)
-	}
-	if wantDialer && transport.DialContext == nil {
-		t.Error("transport.DialContext = nil, want env proxy dialer")
-	}
-	if !wantDialer && transport.DialContext != nil {
-		t.Error("transport.DialContext set, want nil without proxy env")
 	}
 }
 
@@ -510,5 +382,88 @@ func TestClientBypassStringHandling(t *testing.T) {
 					addr, tt.bypass, dialErr, errFakeDialerFailure)
 			}
 		})
+	}
+}
+
+// recordingProxy implements http.ProxyFunc: it records every call and returns
+// a dummy proxy URL. It proves whether the transport routed a request through
+// an inherited HTTP proxy function.
+type recordingProxy struct {
+	calls atomic.Int64
+}
+
+func (r *recordingProxy) proxyFunc() func(*http.Request) (*url.URL, error) {
+	return func(*http.Request) (*url.URL, error) {
+		r.calls.Add(1)
+		return &url.URL{Scheme: "http", Host: "inherited-proxy.invalid:8080"}, nil
+	}
+}
+
+// TestClientSOCKS5ClearsInheritedProxy verifies that configuring a SOCKS5
+// ProxyURL disables any HTTP proxy inherited from the cloned base transport.
+// If transport.Proxy were left set, requests would be tunneled through the
+// inherited HTTP proxy instead of the configured SOCKS5 dialer.
+func TestClientSOCKS5ClearsInheritedProxy(t *testing.T) {
+	clearProxyEnv(t)
+
+	// Install a sentinel inherited proxy on the base transport, then restore
+	// it so other tests keep inheriting the default behavior.
+	baseTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		t.Skip("http.DefaultTransport is not *http.Transport; cannot inject inherited proxy")
+	}
+	origProxy := baseTransport.Proxy
+	rec := &recordingProxy{}
+	baseTransport.Proxy = rec.proxyFunc()
+	t.Cleanup(func() { baseTransport.Proxy = origProxy })
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to open loopback listener: %v", err)
+	}
+	defer listener.Close()
+
+	client, err := httpfx.NewClientForTest(httpfx.Config{
+		ProxyURL: "socks5://127.0.0.1:1080",
+		Bypass:   "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("httpfx.NewClientForTest() error = %v, want nil", err)
+	}
+
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("Transport type = %T, want *http.Transport", client.Transport)
+	}
+
+	// The inherited HTTP proxy must be cleared so SOCKS5 is the only path.
+	if transport.Proxy != nil {
+		t.Error("transport.Proxy != nil after SOCKS5 config, want cleared inherited proxy")
+	}
+	if transport.DialContext == nil {
+		t.Fatal("transport.DialContext = nil, want SOCKS5 dialer")
+	}
+
+	// A bypassed address must dial directly (PerHost routes it to proxy.Direct)
+	// and must NOT reach the inherited HTTP proxy.
+	bypassedConn, dialErr := transport.DialContext(context.Background(), "tcp", listener.Addr().String())
+	if dialErr != nil {
+		t.Fatalf("DialContext(bypassed %q) error = %v, want direct connect", listener.Addr().String(), dialErr)
+	}
+	_ = bypassedConn.Close()
+
+	// A non-bypassed address must go through the SOCKS5 dialer (to the
+	// configured, non-running proxy) and fail there — proving it did NOT use
+	// the inherited HTTP proxy.
+	if _, nonBypassedDialErr := transport.DialContext(
+		context.Background(),
+		"tcp",
+		"10.0.0.1:80",
+	); nonBypassedDialErr == nil {
+		t.Error("DialContext(non-bypassed) succeeded, want SOCKS5 dial failure (no proxy server)")
+	}
+
+	if rec.calls.Load() != 0 {
+		t.Errorf("inherited proxy func called %d times, want 0 (SOCKS5 path must bypass it)", rec.calls.Load())
 	}
 }

@@ -10,7 +10,7 @@
 <div align="center">
   <h1>httpfx</h1>
   <p>
-    Uber Fx module for <code>net/http.Client</code> with SOCKS5 and environment-based proxy support, plus custom root CA trust.
+    Uber Fx module for <code>net/http.Client</code> with SOCKS5 proxy support (including per-host bypass) and custom root CA trust.
   </p>
   <a href="https://github.com/go-core-fx/httpfx/issues/new">Report Bug</a>
   &middot;
@@ -44,7 +44,6 @@
 `httpfx` is an [Uber Fx](https://uber-go.github.io/fx/) module that provides a configured `*http.Client` and a `Factory` for creating additional client instances. It supports:
 
 - **SOCKS5 proxy** via `golang.org/x/net/proxy` (`socks5://user:pass@host:port`)
-- **Environment-based proxy** via `ALL_PROXY` env var (read by `golang.org/x/net/proxy`)
 - **Per-host proxy bypass** for hosts that should connect directly
 - **Custom root CA trust**: append internal/corporate CAs to the system pool or replace it
 - **Per-client overrides** via functional options on the `Factory`
@@ -110,8 +109,7 @@ The module provides both a default `*http.Client` and a `Factory` for creating a
 
 | Field                     | Type            | Default | Description                                                                       |
 | ------------------------- | --------------- | ------- | --------------------------------------------------------------------------------- |
-| `ProxyURL`                | `string`        | `""`    | SOCKS5 proxy URL (e.g. `socks5://user:pass@host:port`). Takes highest precedence. |
-| `ProxyFromEnv`            | `bool`          | `false` | Read proxy from `ALL_PROXY` env var when `ProxyURL` is empty.                     |
+| `ProxyURL`                | `string`        | `""`    | SOCKS5 proxy URL (e.g. `socks5://user:pass@host:port` or `socks5h://host:port`). |
 | `Bypass`                  | `string`        | `""`    | Comma-separated hosts to bypass the proxy (e.g. `localhost,127.0.0.1`).           |
 | `Timeout`                 | `time.Duration` | `0`     | Client-level request timeout. Zero means no timeout.                              |
 | `MaxIdleConns`            | `int`           | `0`     | Maximum idle (keep-alive) connections. Zero means no limit.                       |
@@ -121,7 +119,7 @@ The module provides both a default `*http.Client` and a `Factory` for creating a
 | `TLS.RootCAPEM`           | `string`        | `""`    | Inline PEM-encoded root CA data. Merged with `TLS.RootCAFile` when both are set.  |
 | `TLS.RootCAReplaceSystem` | `bool`          | `false` | When true, replace the system pool; only the configured root CAs are trusted.     |
 
-**Proxy precedence:** `ProxyURL` → `ProxyFromEnv`. To disable all proxying, clear `ProxyURL` and set `ProxyFromEnv: false`.
+When `ProxyURL` is empty, clients inherit the base transport's proxy behavior (by default `http.DefaultTransport` uses `http.ProxyFromEnvironment`, i.e. the host's proxy environment variables). Configure a `socks5://` or `socks5h://` URL to switch to a SOCKS5 dialer (which disables any inherited HTTP proxy); plain HTTP CONNECT proxies (`http://proxy:8080`) are not supported.
 
 > **Platform note:** append mode builds on `x509.SystemCertPool()`, which returns an empty pool on
 > macOS/darwin (system roots load lazily at verify time), so append-mode behavior can differ by
@@ -146,7 +144,7 @@ func Handler(f httpfx.Factory) error {
     }
 
     // Disable proxy for internal service calls
-    internalClient, err := f.NewClient(httpfx.WithProxyURL(""))
+    internalClient, err := f.NewClient(httpfx.WithProxyURL("", ""))
     if err != nil {
         return err
     }
@@ -173,9 +171,7 @@ func Handler(f httpfx.Factory) error {
 
 | Option                       | Description                            |
 | ---------------------------- | -------------------------------------- |
-| `WithProxyURL(url)`          | Override SOCKS5 proxy URL              |
-| `WithProxyFromEnv(v)`        | Override env-based proxy flag          |
-| `WithBypass(bypass)`         | Override proxy bypass list             |
+| `WithProxyURL(url, bypass)`  | Override SOCKS5 proxy URL and bypass list |
 | `WithTimeout(d)`             | Override client timeout                |
 | `WithMaxIdleConns(n)`        | Override max idle connections          |
 | `WithMaxIdleConnsPerHost(n)` | Override max idle connections per host |
@@ -186,7 +182,7 @@ func Handler(f httpfx.Factory) error {
 
 ### Proxy Examples
 
-All proxying goes through `golang.org/x/net/proxy`: an explicit `socks5://` URL or the `ALL_PROXY` environment variable. Plain HTTP CONNECT proxies (`http://proxy:8080`) are not supported.
+All proxying goes through `golang.org/x/net/proxy` via an explicit `socks5://` or `socks5h://` URL. Plain HTTP CONNECT proxies (`http://proxy:8080`) are not supported.
 
 **SOCKS5 with authentication:**
 
@@ -194,18 +190,6 @@ All proxying goes through `golang.org/x/net/proxy`: an explicit `socks5://` URL 
 httpfx.Config{
     ProxyURL: "socks5://user:pass@127.0.0.1:1080",
 }
-```
-
-**Environment-based (reads `ALL_PROXY`):**
-
-```go
-httpfx.Config{
-    ProxyFromEnv: true,
-}
-```
-
-```sh
-export ALL_PROXY="socks5://127.0.0.1:1080"
 ```
 
 **SOCKS5 with bypass for local addresses and CIDR ranges:**
@@ -284,12 +268,10 @@ Notes:
 ## Roadmap
 
 - [x] SOCKS5 proxy support via `golang.org/x/net/proxy`
-- [x] Environment-based proxy (`ALL_PROXY`)
 - [x] Per-host proxy bypass
 - [x] Factory with per-client functional options
 - [x] Transport tuning (idle connections, timeouts)
 - [x] TLS configuration options
-- [ ] Proxy authentication header support
 
 See the [open issues](https://github.com/go-core-fx/httpfx/issues) for a full list of proposed features.
 
