@@ -703,7 +703,7 @@ const (
 // true (only configured CAs trusted). The Go system pool is loaded once per
 // process (crypto/x509 [sync.Once]), so each scenario re-executes the test
 // binary as a child process with SSL_CERT_FILE pointing at the external CA,
-// mirroring the pattern used by TestClientProxyFromEnv.
+// mirroring the child-process re-exec pattern used elsewhere in this package.
 //
 // Platforms where SystemCertPool ignores SSL_CERT_FILE (e.g., darwin returns
 // an empty pool and defers to Security.framework) cannot observe the

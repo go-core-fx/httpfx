@@ -6,17 +6,26 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"golang.org/x/net/proxy"
 )
 
 func newClient(config Config) (*http.Client, error) {
-	transport := &http.Transport{
-		MaxIdleConns:        config.MaxIdleConns,
-		MaxIdleConnsPerHost: config.MaxIdleConnsPerHost,
-		IdleConnTimeout:     config.IdleConnTimeout,
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		base = &http.Transport{}
+	}
+	transport := base.Clone()
+
+	if config.MaxIdleConns != 0 {
+		transport.MaxIdleConns = config.MaxIdleConns
+	}
+	if config.MaxIdleConnsPerHost != 0 {
+		transport.MaxIdleConnsPerHost = config.MaxIdleConnsPerHost
+	}
+	if config.IdleConnTimeout != 0 {
+		transport.IdleConnTimeout = config.IdleConnTimeout
 	}
 
 	if err := applyProxy(transport, config); err != nil {
@@ -29,25 +38,25 @@ func newClient(config Config) (*http.Client, error) {
 	}
 	transport.TLSClientConfig = tlsCfg
 
-	return &http.Client{
-		Transport: transport,
-		Timeout:   config.Timeout,
-	}, nil
+	client := *http.DefaultClient
+	client.Transport = transport
+	if config.Timeout != 0 {
+		client.Timeout = config.Timeout
+	}
+
+	return &client, nil
 }
 
 func applyProxy(transport *http.Transport, config Config) error {
-	switch {
-	case config.ProxyURL != "":
-		return applySOCKSProxy(transport, config.ProxyURL, config.Bypass)
-	case config.ProxyFromEnv:
-		return applyEnvProxy(transport, config.Bypass)
-	default:
+	if config.ProxyURL == "" {
 		return nil
 	}
-}
 
-func applySOCKSProxy(transport *http.Transport, rawURL, bypass string) error {
-	u, err := url.Parse(rawURL)
+	if !strings.HasPrefix(config.ProxyURL, "socks5://") && !strings.HasPrefix(config.ProxyURL, "socks5h://") {
+		return fmt.Errorf("%w: %q", ErrInvalidProxyURL, config.ProxyURL)
+	}
+
+	u, err := url.Parse(config.ProxyURL)
 	if err != nil {
 		return fmt.Errorf("%w", ErrInvalidProxyURL)
 	}
@@ -61,26 +70,14 @@ func applySOCKSProxy(transport *http.Transport, rawURL, bypass string) error {
 		return fmt.Errorf("%w: %w", ErrProxyDialFailed, err)
 	}
 
-	dialer = applyBypass(dialer, bypass)
+	dialer = applyBypass(dialer, config.Bypass)
 	setTransportDialer(transport, dialer)
 
-	return nil
-}
-
-func applyEnvProxy(transport *http.Transport, bypass string) error {
-	hasProxyEnv := os.Getenv("ALL_PROXY") != "" || os.Getenv("all_proxy") != ""
-
-	dialer := proxy.FromEnvironment()
-
-	if dialer == proxy.Direct {
-		if hasProxyEnv {
-			return fmt.Errorf("%w: proxy environment variable set but invalid", ErrInvalidProxyURL)
-		}
-		return nil
-	}
-
-	dialer = applyBypass(dialer, bypass)
-	setTransportDialer(transport, dialer)
+	// Clear any proxy function inherited from the cloned base transport
+	// (e.g. http.ProxyFromEnvironment). With SOCKS5 handled at the dialer
+	// layer, leaving transport.Proxy set would tunnel requests through the
+	// inherited HTTP proxy instead of the configured SOCKS5 dialer.
+	transport.Proxy = nil
 
 	return nil
 }

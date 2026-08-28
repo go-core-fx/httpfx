@@ -87,10 +87,9 @@ func TestWithRootCAReplaceSystemSetsOption(t *testing.T) {
 
 func TestClientOptionsApplyOverridesBaseTLS(t *testing.T) {
 	base := httpfx.Config{
-		ProxyURL:     "socks5://127.0.0.1:1080",
-		ProxyFromEnv: true,
-		Bypass:       "localhost",
-		Timeout:      30 * time.Second,
+		ProxyURL: "socks5://127.0.0.1:1080",
+		Bypass:   "localhost",
+		Timeout:  30 * time.Second,
 		TLS: httpfx.TLSConfig{
 			RootCAFile:          "/base/ca.pem",
 			RootCAPEM:           "base-pem-data",
@@ -115,7 +114,7 @@ func TestClientOptionsApplyOverridesBaseTLS(t *testing.T) {
 	}
 
 	// Non-TLS base fields must pass through untouched.
-	if got.ProxyURL != base.ProxyURL || !got.ProxyFromEnv || got.Bypass != base.Bypass ||
+	if got.ProxyURL != base.ProxyURL || got.Bypass != base.Bypass ||
 		got.Timeout != base.Timeout {
 		t.Errorf("apply() altered non-TLS fields: %+v", got)
 	}
@@ -165,5 +164,18 @@ func TestClientOptionsApplyZeroValuesClearBaseTLS(t *testing.T) {
 
 	if got.TLS != (httpfx.TLSConfig{}) {
 		t.Errorf("TLS = %+v, want zero value after explicit empty overrides", got.TLS)
+	}
+}
+
+func TestWithProxyURLSetsURLAndBypass(t *testing.T) {
+	got := httpfx.ApplyOptionsForTest(httpfx.Config{},
+		httpfx.WithProxyURL("socks5://127.0.0.1:1080", "localhost,127.0.0.1"),
+	)
+
+	if got.ProxyURL != "socks5://127.0.0.1:1080" {
+		t.Errorf("ProxyURL = %q, want %q", got.ProxyURL, "socks5://127.0.0.1:1080")
+	}
+	if got.Bypass != "localhost,127.0.0.1" {
+		t.Errorf("Bypass = %q, want %q", got.Bypass, "localhost,127.0.0.1")
 	}
 }
