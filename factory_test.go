@@ -12,6 +12,8 @@ import (
 )
 
 func TestNewClientAppliesRootCAOverrideEndToEnd(t *testing.T) {
+	t.Parallel()
+
 	authority := newTestAuthority(t, "httpfx-option-ca")
 	serverURL := startTLSServer(t, authority)
 
@@ -38,6 +40,8 @@ func TestNewClientAppliesRootCAOverrideEndToEnd(t *testing.T) {
 }
 
 func TestNewClientPerClientOverridesAreIndependent(t *testing.T) {
+	t.Parallel()
+
 	baseAuthority := newTestAuthority(t, "httpfx-base-ca")
 	overrideAuthority := newTestAuthority(t, "httpfx-override-ca")
 
@@ -100,6 +104,8 @@ func TestNewClientPerClientOverridesAreIndependent(t *testing.T) {
 }
 
 func TestNewClientInvalidConfigReturnsError(t *testing.T) {
+	t.Parallel()
+
 	garbagePEM := "-----BEGIN CERTIFICATE-----\n" +
 		sensitivePayloadMarker + "\n" +
 		"-----END CERTIFICATE-----\n"
@@ -142,6 +148,8 @@ func TestNewClientInvalidConfigReturnsError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			factory := httpfx.NewFactory(tt.baseConfig)
 
 			client, err := factory.NewClient(tt.opts...)
@@ -165,6 +173,8 @@ func TestNewClientInvalidConfigReturnsError(t *testing.T) {
 }
 
 func TestNewClientSuccessReturnsUsableClient(t *testing.T) {
+	t.Parallel()
+
 	factory := httpfx.NewFactory(httpfx.Config{})
 
 	client, err := factory.NewClient(httpfx.WithRootCAReplaceSystem(false))

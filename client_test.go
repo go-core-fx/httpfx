@@ -38,6 +38,8 @@ func clearProxyEnv(t *testing.T) {
 }
 
 func TestClientDefaultConfig(t *testing.T) {
+	t.Parallel()
+
 	client, err := httpfx.NewClientForTest(httpfx.Config{})
 	if err != nil {
 		t.Fatalf("httpfx.NewClientForTest(httpfx.Config{}) returned error: %v", err)
@@ -80,6 +82,8 @@ func TestClientDefaultConfig(t *testing.T) {
 }
 
 func TestClientInvalidProxyURL(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		proxyURL string
@@ -92,6 +96,8 @@ func TestClientInvalidProxyURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			client, err := httpfx.NewClientForTest(httpfx.Config{ProxyURL: tt.proxyURL})
 
 			if client != nil {
@@ -108,6 +114,8 @@ func TestClientInvalidProxyURL(t *testing.T) {
 }
 
 func TestClientTransportSettings(t *testing.T) {
+	t.Parallel()
+
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 
 	tests := []struct {
@@ -169,6 +177,8 @@ func TestClientTransportSettings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			client, err := httpfx.NewClientForTest(tt.config)
 			if err != nil {
 				t.Fatalf("httpfx.NewClientForTest() error = %v, want nil", err)
@@ -199,6 +209,8 @@ func TestClientTransportSettings(t *testing.T) {
 }
 
 func TestClientDistinctTransportsPerCall(t *testing.T) {
+	t.Parallel()
+
 	cfg := httpfx.Config{MaxIdleConns: 42}
 
 	first, err := httpfx.NewClientForTest(cfg)
@@ -224,7 +236,7 @@ func TestClientDistinctTransportsPerCall(t *testing.T) {
 	}
 }
 
-func TestClientSOCKS5Proxy(t *testing.T) {
+func TestClientSOCKS5Proxy(t *testing.T) { //nolint:paralleltest // subtests clear proxy env with t.Setenv
 	tests := []struct {
 		name       string
 		config     httpfx.Config
@@ -265,7 +277,7 @@ func TestClientSOCKS5Proxy(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range tests { //nolint:paralleltest // subtests clear proxy env with t.Setenv
 		t.Run(tt.name, func(t *testing.T) {
 			clearProxyEnv(t)
 
@@ -304,11 +316,13 @@ func TestClientSOCKS5Proxy(t *testing.T) {
 }
 
 func TestClientBypassStringHandling(t *testing.T) {
+	t.Parallel()
+
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to open loopback listener: %v", err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() { _ = listener.Close() })
 
 	addr := listener.Addr().String()
 
@@ -354,6 +368,8 @@ func TestClientBypassStringHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			dialer := httpfx.ApplyBypassForTest(fakeDialer{}, tt.bypass)
 
 			if tt.wantSame {
@@ -403,7 +419,7 @@ func (r *recordingProxy) proxyFunc() func(*http.Request) (*url.URL, error) {
 // ProxyURL disables any HTTP proxy inherited from the cloned base transport.
 // If transport.Proxy were left set, requests would be tunneled through the
 // inherited HTTP proxy instead of the configured SOCKS5 dialer.
-func TestClientSOCKS5ClearsInheritedProxy(t *testing.T) {
+func TestClientSOCKS5ClearsInheritedProxy(t *testing.T) { //nolint:paralleltest // t.Setenv clears process env
 	clearProxyEnv(t)
 
 	// Install a sentinel inherited proxy on the base transport, then restore
