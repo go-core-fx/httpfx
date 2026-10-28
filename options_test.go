@@ -8,6 +8,8 @@ import (
 )
 
 func TestWithRootCAFileSetsOption(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		path string
@@ -20,6 +22,8 @@ func TestWithRootCAFileSetsOption(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := httpfx.ApplyOptionsForTest(httpfx.Config{}, httpfx.WithRootCAFile(tt.path))
 
 			if got.TLS.RootCAFile != tt.path {
@@ -33,6 +37,8 @@ func TestWithRootCAFileSetsOption(t *testing.T) {
 }
 
 func TestWithRootCAPEMSetsOption(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		pem  string
@@ -46,6 +52,8 @@ func TestWithRootCAPEMSetsOption(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := httpfx.ApplyOptionsForTest(httpfx.Config{}, httpfx.WithRootCAPEM(tt.pem))
 
 			if got.TLS.RootCAPEM != tt.pem {
@@ -59,6 +67,8 @@ func TestWithRootCAPEMSetsOption(t *testing.T) {
 }
 
 func TestWithRootCAReplaceSystemSetsOption(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		replace bool
@@ -69,6 +79,8 @@ func TestWithRootCAReplaceSystemSetsOption(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := httpfx.ApplyOptionsForTest(
 				httpfx.Config{},
 				httpfx.WithRootCAReplaceSystem(tt.replace),
@@ -86,6 +98,8 @@ func TestWithRootCAReplaceSystemSetsOption(t *testing.T) {
 }
 
 func TestClientOptionsApplyOverridesBaseTLS(t *testing.T) {
+	t.Parallel()
+
 	base := httpfx.Config{
 		ProxyURL: "socks5://127.0.0.1:1080",
 		Bypass:   "localhost",
@@ -127,6 +141,8 @@ func TestClientOptionsApplyOverridesBaseTLS(t *testing.T) {
 }
 
 func TestClientOptionsApplyWithoutRootCAKeepsBaseTLS(t *testing.T) {
+	t.Parallel()
+
 	base := httpfx.Config{
 		Timeout: time.Second,
 		TLS: httpfx.TLSConfig{
@@ -148,6 +164,8 @@ func TestClientOptionsApplyWithoutRootCAKeepsBaseTLS(t *testing.T) {
 }
 
 func TestClientOptionsApplyZeroValuesClearBaseTLS(t *testing.T) {
+	t.Parallel()
+
 	base := httpfx.Config{
 		TLS: httpfx.TLSConfig{
 			RootCAFile:          "/base/ca.pem",
@@ -168,6 +186,8 @@ func TestClientOptionsApplyZeroValuesClearBaseTLS(t *testing.T) {
 }
 
 func TestWithProxyURLSetsURLAndBypass(t *testing.T) {
+	t.Parallel()
+
 	got := httpfx.ApplyOptionsForTest(httpfx.Config{},
 		httpfx.WithProxyURL("socks5://127.0.0.1:1080", "localhost,127.0.0.1"),
 	)

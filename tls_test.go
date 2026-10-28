@@ -167,6 +167,8 @@ func requestOverTLS(t *testing.T, clientTLSConfig *tls.Config, serverURL string)
 }
 
 func TestBuildTLSConfigZeroValueReturnsNil(t *testing.T) {
+	t.Parallel()
+
 	cfg, err := httpfx.BuildTLSConfigForTest(httpfx.TLSConfig{})
 	if err != nil {
 		t.Fatalf("httpfx.BuildTLSConfigForTest(httpfx.TLSConfig{}) error = %v, want nil", err)
@@ -177,6 +179,8 @@ func TestBuildTLSConfigZeroValueReturnsNil(t *testing.T) {
 }
 
 func TestBuildTLSConfigTrustsRootCAFile(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name  string
 		files int // number of CA certs concatenated into the file
@@ -187,6 +191,8 @@ func TestBuildTLSConfigTrustsRootCAFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			authority := newTestAuthority(t, "httpfx-test-ca")
 
 			var bundle []byte
@@ -216,6 +222,8 @@ func TestBuildTLSConfigTrustsRootCAFile(t *testing.T) {
 }
 
 func TestBuildTLSConfigTrustsRootCAPEM(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		pems int // number of CA certs concatenated into the PEM string
@@ -226,6 +234,8 @@ func TestBuildTLSConfigTrustsRootCAPEM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			authority := newTestAuthority(t, "httpfx-test-ca")
 
 			var bundle []byte
@@ -250,6 +260,8 @@ func TestBuildTLSConfigTrustsRootCAPEM(t *testing.T) {
 }
 
 func TestBuildTLSConfigMergesFileAndPEM(t *testing.T) {
+	t.Parallel()
+
 	fileAuthority := newTestAuthority(t, "httpfx-file-ca")
 	pemAuthority := newTestAuthority(t, "httpfx-pem-ca")
 
@@ -277,6 +289,8 @@ func TestBuildTLSConfigMergesFileAndPEM(t *testing.T) {
 }
 
 func TestBuildTLSConfigReplaceSystemPool(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name                string
 		rootCAReplaceSystem bool
@@ -287,6 +301,8 @@ func TestBuildTLSConfigReplaceSystemPool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			authority := newTestAuthority(t, "httpfx-replace-ca")
 
 			cfg, err := httpfx.BuildTLSConfigForTest(httpfx.TLSConfig{
@@ -310,6 +326,8 @@ func TestBuildTLSConfigReplaceSystemPool(t *testing.T) {
 }
 
 func TestBuildTLSConfigErrors(t *testing.T) {
+	t.Parallel()
+
 	validAuthority := newTestAuthority(t, "httpfx-valid-ca")
 
 	unreadablePath := filepath.Join(t.TempDir(), "unreadable.pem")
@@ -386,6 +404,8 @@ func TestBuildTLSConfigErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tt.wantErr == nil {
 				t.Skip("placeholder case without expected error")
 			}
@@ -412,6 +432,8 @@ func TestBuildTLSConfigErrors(t *testing.T) {
 }
 
 func TestBuildTLSConfigDistinctInstancesPerCall(t *testing.T) {
+	t.Parallel()
+
 	authority := newTestAuthority(t, "httpfx-idempotency-ca")
 	tlsInput := httpfx.TLSConfig{RootCAPEM: string(authority.certPEM)}
 
@@ -436,7 +458,11 @@ func TestBuildTLSConfigDistinctInstancesPerCall(t *testing.T) {
 }
 
 func TestNewClientTLSIntegration(t *testing.T) {
+	t.Parallel()
+
 	t.Run("zero_value_config_keeps_tls_client_config_nil", func(t *testing.T) {
+		t.Parallel()
+
 		client, err := httpfx.NewClientForTest(httpfx.Config{})
 		if err != nil {
 			t.Fatalf("httpfx.NewClientForTest(httpfx.Config{}) error = %v, want nil", err)
@@ -452,6 +478,8 @@ func TestNewClientTLSIntegration(t *testing.T) {
 	})
 
 	t.Run("configured_root_ca_attaches_and_validates_end_to_end", func(t *testing.T) {
+		t.Parallel()
+
 		authority := newTestAuthority(t, "httpfx-integration-ca")
 		serverURL := startTLSServer(t, authority)
 
@@ -475,6 +503,8 @@ func TestNewClientTLSIntegration(t *testing.T) {
 	})
 
 	t.Run("invalid_root_ca_file_fails_client_creation", func(t *testing.T) {
+		t.Parallel()
+
 		client, err := httpfx.NewClientForTest(httpfx.Config{
 			TLS: httpfx.TLSConfig{RootCAFile: filepath.Join(t.TempDir(), "missing.pem")},
 		})
@@ -530,6 +560,8 @@ func assertUnknownAuthority(t *testing.T, reqErr error) {
 }
 
 func TestHTTPSIntegrationDefaultClientRejectsUnknownAuthority(t *testing.T) {
+	t.Parallel()
+
 	authority := newTestAuthority(t, "httpfx-untrusted-ca")
 	serverURL := startTLSServer(t, authority)
 
@@ -543,6 +575,8 @@ func TestHTTPSIntegrationDefaultClientRejectsUnknownAuthority(t *testing.T) {
 }
 
 func TestHTTPSIntegrationRootCAFileEndToEnd(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		bundle int // number of CA certs concatenated into the file
@@ -553,6 +587,8 @@ func TestHTTPSIntegrationRootCAFileEndToEnd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			authority := newTestAuthority(t, "httpfx-e2e-file-ca")
 
 			var bundle []byte
@@ -579,6 +615,8 @@ func TestHTTPSIntegrationRootCAFileEndToEnd(t *testing.T) {
 }
 
 func TestHTTPSIntegrationRootCAPEMEndToEnd(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		bundle int // number of CA certs concatenated into the PEM string
@@ -589,6 +627,8 @@ func TestHTTPSIntegrationRootCAPEMEndToEnd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			authority := newTestAuthority(t, "httpfx-e2e-pem-ca")
 
 			var bundle []byte
@@ -611,6 +651,8 @@ func TestHTTPSIntegrationRootCAPEMEndToEnd(t *testing.T) {
 }
 
 func TestHTTPSIntegrationMergedFileAndPEMSourcesOneConfig(t *testing.T) {
+	t.Parallel()
+
 	fileCA := newTestAuthority(t, "httpfx-merged-file-ca")
 	pemCA := newTestAuthority(t, "httpfx-merged-pem-ca")
 
@@ -634,6 +676,8 @@ func TestHTTPSIntegrationMergedFileAndPEMSourcesOneConfig(t *testing.T) {
 }
 
 func TestHTTPSIntegrationAppendVsReplaceModes(t *testing.T) {
+	t.Parallel()
+
 	customCA := newTestAuthority(t, "httpfx-mode-custom-ca")
 	rogueCA := newTestAuthority(t, "httpfx-mode-rogue-external-ca")
 	customURL := startTLSServer(t, customCA)
@@ -649,6 +693,8 @@ func TestHTTPSIntegrationAppendVsReplaceModes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			client, err := httpfx.NewClientForTest(httpfx.Config{
 				Timeout: 5 * time.Second,
 				TLS: httpfx.TLSConfig{
@@ -709,6 +755,8 @@ const (
 // an empty pool and defers to Security.framework) cannot observe the
 // divergence; those children skip via a behavioral precondition probe.
 func TestHTTPSIntegrationReplaceSystemPoolControlsExternalTrust(t *testing.T) {
+	t.Parallel()
+
 	if caseName := os.Getenv(envTLSReplaceCase); caseName != "" {
 		runTLSReplaceChildCase(t, caseName)
 		return
@@ -730,6 +778,8 @@ func TestHTTPSIntegrationReplaceSystemPoolControlsExternalTrust(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			cmd := exec.Command(os.Args[0],
 				"-test.run=^TestHTTPSIntegrationReplaceSystemPoolControlsExternalTrust$",
 				"-test.v",
@@ -967,6 +1017,8 @@ func readSOCKS5Address(conn net.Conn, atyp byte) (string, error) {
 }
 
 func TestHTTPSIntegrationThroughSOCKS5ProxyWithCustomCA(t *testing.T) {
+	t.Parallel()
+
 	authority := newTestAuthority(t, "httpfx-proxy-tls-ca")
 	serverURL := startTLSServer(t, authority)
 	serverHostPort := strings.TrimPrefix(serverURL, "https://")
@@ -974,6 +1026,8 @@ func TestHTTPSIntegrationThroughSOCKS5ProxyWithCustomCA(t *testing.T) {
 	proxyServer := startSOCKS5Proxy(t)
 
 	t.Run("custom_ca_handshakes_through_tunnel", func(t *testing.T) {
+		t.Parallel()
+
 		client, err := httpfx.NewClientForTest(httpfx.Config{
 			ProxyURL: "socks5://" + proxyServer.addr(),
 			Timeout:  5 * time.Second,
@@ -991,6 +1045,8 @@ func TestHTTPSIntegrationThroughSOCKS5ProxyWithCustomCA(t *testing.T) {
 	})
 
 	t.Run("untrusted_ca_still_rejected_through_tunnel", func(t *testing.T) {
+		t.Parallel()
+
 		rogueCA := newTestAuthority(t, "httpfx-proxy-rogue-ca")
 		rogueURL := startTLSServer(t, rogueCA)
 		rogueHostPort := strings.TrimPrefix(rogueURL, "https://")

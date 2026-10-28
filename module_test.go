@@ -16,6 +16,8 @@ import (
 // [Module] and proves the injected [*http.Client] trusts a custom root CA for
 // end-to-end HTTPS requests.
 func TestModuleInjectsClientTrustingCustomCA(t *testing.T) {
+	t.Parallel()
+
 	authority := newTestAuthority(t, "httpfx-fx-module-ca")
 	serverURL := startTLSServer(t, authority)
 
@@ -63,6 +65,8 @@ func TestModuleInjectsClientTrustingCustomCA(t *testing.T) {
 // fails application startup with the underlying construction error instead of
 // silently injecting a fallback client.
 func TestModuleInvalidTLSConfigFailsStartup(t *testing.T) {
+	t.Parallel()
+
 	var client *http.Client
 	app := fx.New(
 		fx.NopLogger,
